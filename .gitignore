@@ -1,0 +1,8 @@
+*.html
+*.csv
+*.parquet
+*.pkl
+*.feather
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
