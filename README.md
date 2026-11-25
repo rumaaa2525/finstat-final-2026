@@ -31,6 +31,7 @@
 | 하루 유효 파일 수 | 약 3,900 → 4,300개로 완만히 증가 (아래 그림) | `01_plot_coverage.py` |
 | 파싱 후 시세 행 수 · 분석 대상 종목 수 | ⬜ `02_parse_all.py` / `04_common_questions.py` 실행 로그 값 기입 | |
 | 재무 표(기업실적분석) | 보유 종목 **3,837개**, 변경 스냅샷 **363,336건** | `02b_parse_financials.py` |
+| 재무 표 변경 이벤트 추출 (신규) | `fundamentals_events.csv` (건수 ⬜) | `extract_fundamentals.py` |
 
 ![coverage](outputs/week1_archive_coverage.png)
 
@@ -160,15 +161,55 @@
 
 ## 4. 재무제표 질문 Q5~Q9
 
-기업실적분석 표 파싱은 끝났다(3,837종목, 변경 스냅샷 363,336건, `02b_parse_financials.py` → `data_processed/financial_snapshots.pkl`). 질문별 분석은 아직 없다.
+종목 페이지의 **기업실적분석 표**(매출액·영업이익·영업이익률·ROE·부채비율·EPS·BPS·배당, 추정치 `E` 포함)를 쓴다.
+이 표는 날마다 바뀌지 않지만 날마다 저장했으므로, **표가 바뀐 날이 곧 실적 발표일**이다. 그래서 날짜별로 표를 비교해 바뀐 날을 찾는 작업이 모든 질문보다 먼저다.
 
-| 질문 | 정의 | 그림 | 한 문장 결론 |
-|---|---|---|---|
-| Q5 | ⬜ | ⬜ | ⬜ |
-| Q6 | ⬜ | ⬜ | ⬜ |
-| Q7 | ⬜ | ⬜ | ⬜ |
-| Q8 | ⬜ | ⬜ | ⬜ |
-| Q9 | ⬜ | ⬜ | ⬜ |
+### 4-1. 실적 표 추출 (오늘 추가)
+
+| 항목 | 내용 |
+|---|---|
+| 스크립트 | `extract_fundamentals.py` (저장소 루트) |
+| 입력 | `/mnt/data/stock/<날짜>/<종목코드>.html` 전체 (표 클래스 `tb_type1_ifrs`) |
+| 추출 지표 | 매출액, 영업이익, 당기순이익, 영업이익률, 순이익률, ROE(지배주주), 부채비율, EPS, PER, BPS, PBR, 주당배당금, 시가배당률, 배당성향 (14개) |
+| 기간 구분 | `PeriodType` = Y(연간) / Q(분기), `FiscalPeriod` = 결산 기준월, `IsEstimate` = 1이면 추정치(E) |
+| 바뀐 날 찾는 방식 | 종목별로 표 전체(모든 기간·지표 값)를 이전 저장분과 비교한다. 처음 보이면 `first_obs`, 값이 하나라도 달라졌으면 `changed`, 마지막 관측일은 `last_obs` 로 표시하고, 이 세 경우만 행으로 남긴다 |
+| 출력 | `~/fundamentals_events.csv` (`.gitignore`로 저장소에는 없음) |
+
+| 그림 | 만드는 스크립트 | 내용 |
+|---|---|---|
+| `events_timeline.png` | `plot_fundamentals.py` | 월별 저장 행 수를 EventFlag별로 쌓은 막대 |
+| `fundamentals_summary.png` | `plot_fundamentals.py` | 실적치(Actual) vs 추정치(Estimate)의 ROE·PBR 분포 |
+
+![events_timeline](events_timeline.png)
+
+그림에서 읽은 것:
+- 2024-03~04의 `first_obs`는 수집 초기(947종목) 구간에서 처음 관측된 종목이고, 2026-09의 `last_obs`는 마지막 날 기준 최종 표다. 그 외 달은 거의 전부 `changed`다.
+- 월별 행 수는 대체로 10만~17만 행인데 **2025-07만 약 7천 행**으로 급감한다. 2025-07-02~07-31 폴더 누락(§1)과 일치하므로 수집 누락의 영향으로 보인다.
+- 2025-03, 2025-04, 2026-02~03도 상대적으로 낮다. 원인은 ⬜ 확인 필요.
+
+![fundamentals_summary](fundamentals_summary.png)
+
+그림에서 읽은 것 (분포 모양을 눈으로 읽은 값, 계산값은 아님):
+- ROE: 실적치는 음수 쪽 꼬리가 두껍고(−50% 이하로 잘린 막대 포함), 추정치는 0~20% 구간에 몰려 있다. 추정치에는 큰 적자 예상이 거의 없다.
+- PBR: 두 분포 모두 0.3~1.0 구간에 가장 많이 몰려 있어 **PBR 1 미만 종목이 많다**(Q9 재료). 5배 이상은 5로 잘려 맨 오른쪽에 쌓여 있다.
+
+> **주의 (바뀐 날 ≠ 실적 발표일일 수 있다):** 바뀐 날 판정이 표 전체 비교라서, 추정치(E)만 수정되어도 `changed`가 된다. 월 10만 행 이상이 `changed`인 것도 이 때문으로 보인다. 실적 발표일로 쓰려면 **`IsEstimate`가 1에서 0으로 바뀐 기간**(추정치가 실적치로 확정된 날)만 골라내는 단계가 더 필요하다. ⬜
+>
+> **수치 불일치:** 위 §1의 "3,837종목, 변경 스냅샷 363,336건"은 `02b_parse_financials.py` 결과이고, 오늘 `extract_fundamentals.py`가 만든 CSV는 기간별 행 단위(종목 × 기간)라 건수 단위가 다르다. `plot_fundamentals.py` 주석에는 약 357만 행으로 적혀 있으나, 이 README에서 CSV를 직접 세어 확인한 값은 아니다. ⬜ 실행 로그로 확정
+
+### 4-2. 질문별 결과
+
+아직 분석 스크립트와 결과는 없다. 질문과 확인할 항목만 적어 둔다 (정의·그림·결론은 분석 후 기입).
+
+| 질문 | 확인할 항목 | 정의 | 그림 | 한 문장 결론 |
+|---|---|---|---|---|
+| **Q5** 영업이익률이 높은 업종이 주가 수익률도 높았는가 | 업종별 영업이익률과 누적 수익률의 관계 / 업종 안에서도 같은 방향인가 / 이익률이 *올라간* 업종과 *원래 높았던* 업종 중 어느 쪽이 올랐는가 | ⬜ | ⬜ | ⬜ |
+| **Q6** 실적 발표 뒤 주가는 며칠 만에 반응을 끝내는가 | 실적 표가 바뀐 날 찾기 / 발표 전후 10일 누적 수익률 / 영업이익이 추정치를 넘긴 경우와 못 미친 경우의 차이 | ⬜ | ⬜ | ⬜ |
+| **Q7** 추정치는 어느 업종에서 가장 많이 빗나갔는가 | 업종별 추정 오차 분포 / 같은 분기 추정치가 발표 전 몇 달 동안 어떻게 수정됐는가 / 빗나간 방향이 한쪽으로 쏠리는가 | ⬜ | ⬜ | ⬜ |
+| **Q8** 부채비율이 높은 업종이 더 크게 흔들렸는가 | 부채비율과 수익률 변동성의 관계 / 시장이 급락한 구간과 보통 구간의 비교 | ⬜ | ⬜ | ⬜ |
+| **Q9** PBR이 1 아래인 종목은 2년 반 뒤 어떻게 됐는가 | 저PBR 종목이 몰린 업종 / ROE가 양수인 종목과 음수인 종목의 이후 수익률 차이 / 저PBR이 해소된 종목과 그대로인 종목 | ⬜ | ⬜ | ⬜ |
+
+> Q9의 "2년 반"은 분석 기간(2024-04-15 ~ 2026-09-02, 약 2.4년)과 맞춘 것이다. Q6·Q7은 먼저 "표가 바뀐 날(실적 발표일)" 목록이 있어야 한다.
 
 ---
 
@@ -218,9 +259,15 @@ python src/run_q4.py                # → outputs/q4_def.png
 python src/run_q23.py               # → outputs/q3_sector_correlation.png (VW)
 python src/fix_q12_full.py          # → outputs/q1_mcap_rank_shift.png (맨 마지막)
 
-# 3. 보고서 HTML
+# 3. 재무제표 (루트에서 실행)
+python extract_fundamentals.py      # → ~/fundamentals_events.csv (실적 표가 바뀐 날만 저장)
+python plot_fundamentals.py         # → events_timeline.png, fundamentals_summary.png
+
+# 4. 보고서 HTML
 python src/build_html.py            # → week2_submission.html
 ```
+> `plot_fundamentals.py`는 CSV를 `/home/s202325492/fundamentals_events.csv` 로 **고정 경로**에서 읽고, 그림은 현재 폴더에 저장한다. 다른 환경에서는 경로를 고쳐야 하고, `extract_fundamentals.py`는 `max_workers=8`이다.
+>
 > `run_q1.py`가 `outputs/meta.json`을 새로 만들고 이후 스크립트가 값을 덧붙이므로 순서를 지켜야 한다.
 
 ---
@@ -234,6 +281,10 @@ python src/build_html.py            # → week2_submission.html
 ├── week1_submission.md          # 1주차 제출: 아카이브 범위·결함 스캔
 ├── week2_common_questions.md    # 2주차 초기 메모 (수치는 아래 HTML이 최신)
 ├── week2_submission.html        # 2주차 면담 보고서
+├── extract_fundamentals.py      # 실적 표 변경 이벤트 추출 (재무제표 질문용)
+├── plot_fundamentals.py         # 위 결과 요약 그림 2장
+├── events_timeline.png
+├── fundamentals_summary.png
 ├── outputs/                     # 그림(png)과 meta.json
 └── src/
 ```
@@ -244,7 +295,9 @@ python src/build_html.py            # → week2_submission.html
 | 파싱 | `02_parse_all.py`, `02c_fix_tab1.py`, `02d_fix_sector.py`, `02b_parse_financials.py` | HTML → 시세·시가총액·업종·재무 표 |
 | 진단 | `03_diagnose_defects.py` | 업종 결측, 특수 종목, 재분류, 가격 불연속 |
 | 정제 | `run_q12.py` | 보통주 필터, 수익률 계산 → `clean_q.pkl` |
+| 재무 | `extract_fundamentals.py`, `plot_fundamentals.py` | 기업실적분석 표 변경 이벤트 추출, 월별 분포·실적/추정 분포 그림 |
 | Q1~Q4 | `run_q1.py` ~ `run_q4.py`, `run_q23.py`, `fix_q12_full.py` | 질문별 분석·그림 |
 | 보고서 | `build_html.py` | `week2_submission.html` 생성 |
+| Q1·Q2 그림 수정본 | `one.py` | `fix_q12_full.py`의 수정본 (하드코딩 라벨 제거, 요약 txt 생성). `src/`로 옮겨 쓰는 용도 |
 | 독립 실행판 | `04_common_questions.py` | 파싱 결과에서 Q1~Q4를 한 번에 계산 (업종 15종목 이상, 필터가 달라 수치가 최종과 다름) |
 | 구버전·중복 | `generate_all_charts.py`, `step1_q12.py`, `step2_q34_html.py`, `build_clean.py`, `build_clean_html.py`, `build_full_html.py`, `build_week2_html.py`, `make_html.py`, `patch_html_details.py` | 이전 시도 |
