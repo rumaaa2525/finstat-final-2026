@@ -1,11 +1,30 @@
+import os
+import glob
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import numpy as np
 
-plt.rcParams['font.family'] = 'NanumGothic'
+# 서버 내 한글 폰트 자동 탐색 및 등록
+font_candidates = []
+for pattern in ['*Nanum*.ttf', '*NotoSansCJK*.ttc', '*NotoSansKR*.otf', '*UnDotum*.ttf', '*Baekmuk*.ttf', '*Malgun*.ttf']:
+    font_candidates.extend(glob.glob(f'/usr/share/fonts/**/{pattern}', recursive=True))
+    font_candidates.extend(glob.glob(os.path.expanduser(f'~/.local/share/fonts/**/{pattern}'), recursive=True))
+
+if font_candidates:
+    font_path = font_candidates[0]
+    fm.fontManager.addfont(font_path)
+    font_name = fm.FontProperties(fname=font_path).get_name()
+    plt.rcParams['font.family'] = font_name
+    print(f"[사용 폰트] {font_name} ({font_path})")
+else:
+    print("[경고] 서버에 한글 폰트가 없습니다. 아래 '한글 폰트 설치' 안내를 참고하세요.")
+
 plt.rcParams['axes.unicode_minus'] = False
 plt.style.use('seaborn-v0_8-whitegrid')
+if font_candidates:
+    plt.rcParams['font.family'] = font_name  # style.use 이후 폰트 재적용 필수
 
 sectors = ['반도체', '자동차', '조선', '바이오', '금융', '유통', '철강', '화학']
 opm_initial = [12.0, 7.0, -2.7, 16.5, 20.0, 4.9, 6.9, 6.7]
