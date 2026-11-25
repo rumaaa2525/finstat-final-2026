@@ -1,30 +1,18 @@
 import os
-import glob
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import numpy as np
 
-# 서버 내 한글 폰트 자동 탐색 및 등록
-font_candidates = []
-for pattern in ['*Nanum*.ttf', '*NotoSansCJK*.ttc', '*NotoSansKR*.otf', '*UnDotum*.ttf', '*Baekmuk*.ttf', '*Malgun*.ttf']:
-    font_candidates.extend(glob.glob(f'/usr/share/fonts/**/{pattern}', recursive=True))
-    font_candidates.extend(glob.glob(os.path.expanduser(f'~/.local/share/fonts/**/{pattern}'), recursive=True))
-
-if font_candidates:
-    font_path = font_candidates[0]
-    fm.fontManager.addfont(font_path)
-    font_name = fm.FontProperties(fname=font_path).get_name()
-    plt.rcParams['font.family'] = font_name
-    print(f"[사용 폰트] {font_name} ({font_path})")
-else:
-    print("[경고] 서버에 한글 폰트가 없습니다. 아래 '한글 폰트 설치' 안내를 참고하세요.")
-
-plt.rcParams['axes.unicode_minus'] = False
 plt.style.use('seaborn-v0_8-whitegrid')
-if font_candidates:
-    plt.rcParams['font.family'] = font_name  # style.use 이후 폰트 재적용 필수
+
+# 현재 폴더의 NanumGothic.ttf 강제 등록 및 적용
+font_path = os.path.abspath('NanumGothic.ttf')
+fm.fontManager.addfont(font_path)
+font_prop = fm.FontProperties(fname=font_path)
+plt.rcParams['font.family'] = font_prop.get_name()
+plt.rcParams['axes.unicode_minus'] = False
 
 sectors = ['반도체', '자동차', '조선', '바이오', '금융', '유통', '철강', '화학']
 opm_initial = [12.0, 7.0, -2.7, 16.5, 20.0, 4.9, 6.9, 6.7]
@@ -69,4 +57,4 @@ ax2.legend(fontsize=9.5)
 plt.suptitle('Q5. 영업이익률 수준 및 개선 여부가 주가 수익률에 미친 영향', fontsize=14, fontweight='bold', y=1.02)
 plt.tight_layout()
 plt.savefig('Q5_opm_vs_return.png', dpi=300, bbox_inches='tight')
-print("저장 완료: Q5_opm_vs_return.png")
+print("적용된 폰트:", plt.rcParams['font.family'])
